@@ -1,4 +1,4 @@
 .env
-.json
+*.json
 memory.md
 task_memory.md

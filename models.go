@@ -22,8 +22,8 @@ type Model struct {
 	Name     string   // display name
 	Provider Provider
 	Endpoint string
-	EnvKey   string // name of env var that holds the API key
-	APIKey   string // populated at runtime from env
+	EnvKeys  []string // list of env vars for key rotation
+	APIKey   string   // populated at runtime from env
 
 	// Context window (tokens) — informational
 	ContextWindow int
@@ -40,7 +40,7 @@ var SelectedModels = []Model{
 		Name:          "Gemini 2.5 Flash",
 		Provider:      ProviderGoogle,
 		Endpoint:      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
-		EnvKey:        "GOOGLE_API_KEY",
+		EnvKeys:       []string{"GOOGLE_API_KEY_1", "GOOGLE_API_KEY_2", "GOOGLE_API_KEY_3", "GOOGLE_API_KEY_4"},
 		ContextWindow: 1_000_000,
 		RPM:           10,
 		RPD:           500,
@@ -51,7 +51,7 @@ var SelectedModels = []Model{
 		Name:          "Codestral",
 		Provider:      ProviderMistral,
 		Endpoint:      "https://api.mistral.ai/v1/chat/completions",
-		EnvKey:        "MISTRAL_API_KEY",
+		EnvKeys:       []string{"MISTRAL_API_KEY"},
 		ContextWindow: 256_000,
 		RPM:           2,
 		RPD:           0,
@@ -62,7 +62,7 @@ var SelectedModels = []Model{
 		Name:          "Llama 3.3 70B",
 		Provider:      ProviderGroq,
 		Endpoint:      "https://api.groq.com/openai/v1/chat/completions",
-		EnvKey:        "GROQ_API_KEY",
+		EnvKeys:       []string{"GROQ_API_KEY"},
 		ContextWindow: 131_072,
 		RPM:           30,
 		RPD:           14400,
@@ -73,7 +73,7 @@ var SelectedModels = []Model{
 		Name:          "Qwen3 32B",
 		Provider:      ProviderGroq,
 		Endpoint:      "https://api.groq.com/openai/v1/chat/completions",
-		EnvKey:        "GROQ_API_KEY",
+		EnvKeys:       []string{"GROQ_API_KEY"},
 		ContextWindow: 131_072,
 		RPM:           30,
 		RPD:           14_400,

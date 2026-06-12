@@ -15,21 +15,16 @@ func main() {
 		fmt.Fprintf(os.Stderr, "warning: .env load error: %v\n", err)
 	}
 
-	// Inject API keys into model definitions
-	for i := range SelectedModels {
-		SelectedModels[i].APIKey = os.Getenv(SelectedModels[i].EnvKey)
-	}
-
-	// Build rate limiters for every model
-	limiters := make(map[string]*RateLimiter)
+	// Build a key pool for every model (handles multi-key rotation, e.g. Gemini)
+	pools := make(map[string]*KeyPool)
 	for _, m := range SelectedModels {
-		limiters[m.Key] = NewRateLimiter(m.RPM, m.RPD)
+		pools[m.Key] = NewKeyPool(m)
 	}
 
-	// Find which models are actually usable (have an API key)
+	// Find which models are actually usable (have at least one API key)
 	var available []Model
 	for _, m := range SelectedModels {
-		if m.APIKey != "" {
+		if pools[m.Key].Available() {
 			available = append(available, m)
 		}
 	}
@@ -38,13 +33,13 @@ func main() {
 
 	if len(available) == 0 {
 		fmt.Println(Red + "  No API keys found. Create a .env file with:" + Reset)
-		fmt.Println(Grey + "    GOOGLE_API_KEY=...")
+		fmt.Println(Grey + "    GOOGLE_API_KEY_1=...")
 		fmt.Println("    MISTRAL_API_KEY=...")
 		fmt.Println("    GROQ_API_KEY=..." + Reset)
 		os.Exit(1)
 	}
 
-	printModelList(available, limiters)
+	printModelList(available, pools)
 
 	reader := bufio.NewReader(os.Stdin)
 
@@ -54,12 +49,21 @@ func main() {
 		col := providerColor(m.Provider)
 		fmt.Printf("  %s%d.%s %sSingle chat → %s%s\n", Bold, i+1, Reset, col, m.Name, Reset)
 	}
+	groupIdx := len(available) + 1
+	selfIdx := len(available) + 2
 	fmt.Printf("  %s%d.%s %sGroup chat (broadcast to all)%s\n",
-		Bold, len(available)+1, Reset, Magenta, Reset)
+		Bold, groupIdx, Reset, Magenta, Reset)
+	fmt.Printf("  %s%d.%s %sSelf-improvement loop (agent rewrites itself)%s\n",
+		Bold, selfIdx, Reset, Yellow, Reset)
 	fmt.Println()
 	fmt.Print(Bold + "  Select mode: " + Reset)
 
-	modeInput := readLine(reader)
+	modeInput, err := readLine(reader)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%sError reading input: %v%s\n", Red, err, Reset)
+		os.Exit(1)
+	}
+
 	modeIdx := 0
 	fmt.Sscanf(modeInput, "%d", &modeIdx)
 
@@ -68,10 +72,20 @@ func main() {
 	if modeIdx >= 1 && modeIdx <= len(available) {
 		// Single model chat
 		selected := available[modeIdx-1]
-		runSingleChat(reader, selected, limiters[selected.Key])
-	} else if modeIdx == len(available)+1 {
+		runSingleChat(reader, selected, pools[selected.Key])
+	} else if modeIdx == groupIdx {
 		// Group chat
-		runGroupChat(reader, available, limiters)
+		runGroupChat(reader, available, pools)
+	} else if modeIdx == selfIdx {
+		// Task or self-improvement loop
+		fmt.Print(Bold + "  Task (leave blank for self-improvement mode):\n  › " + Reset)
+		task, err := readLine(reader)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%sError reading input: %v%s\n", Red, err, Reset)
+			os.Exit(1)
+		}
+		fmt.Println()
+		RunSelfLoop(available, pools, 0, task)
 	} else {
 		fmt.Println(Red + "  Invalid selection." + Reset)
 		os.Exit(1)
@@ -80,7 +94,7 @@ func main() {
 
 // ── Single chat ───────────────────────────────────────────────────────────────
 
-func runSingleChat(reader *bufio.Reader, m Model, limiter *RateLimiter) {
+func runSingleChat(reader *bufio.Reader, m Model, pool *KeyPool) {
 	conv := NewConversation()
 	spinner := NewSpinner()
 
@@ -90,7 +104,11 @@ func runSingleChat(reader *bufio.Reader, m Model, limiter *RateLimiter) {
 
 	for {
 		fmt.Printf("%s%s›%s ", col, Bold, Reset)
-		prompt := readLine(reader)
+		prompt, err := readLine(reader)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%sError reading input: %v%s\n", Red, err, Reset)
+			break // Exit chat loop on input error
+		}
 
 		if handleMeta(prompt, conv) {
 			continue
@@ -106,13 +124,13 @@ func runSingleChat(reader *bufio.Reader, m Model, limiter *RateLimiter) {
 		spinner.Start(fmt.Sprintf("waiting for %s…", m.Name))
 
 		start := time.Now()
-		reply, err := sendWithLimit(m, limiter, conv.Get())
+		reply, err := sendWithLimit(m, pool, conv.Get())
 		elapsed := time.Since(start)
 
 		spinner.Stop()
 
 		if err != nil {
-			printError(m, err)
+			printError(m.Provider, m.Name, err)
 			// Remove the user message we just added so history stays clean
 			conv.Clear()
 			for _, msg := range conv.Get() {
@@ -122,13 +140,13 @@ func runSingleChat(reader *bufio.Reader, m Model, limiter *RateLimiter) {
 		}
 
 		conv.Add("assistant", reply)
-		printResponse(m, reply, elapsed)
+		printResponse(m.Provider, m.Name, m.ID, reply, elapsed)
 	}
 }
 
 // ── Group chat ────────────────────────────────────────────────────────────────
 
-func runGroupChat(reader *bufio.Reader, models []Model, limiters map[string]*RateLimiter) {
+func runGroupChat(reader *bufio.Reader, models []Model, pools map[string]*KeyPool) {
 	// Each model gets its own conversation history
 	convs := make(map[string]*Conversation)
 	for _, m := range models {
@@ -143,7 +161,11 @@ func runGroupChat(reader *bufio.Reader, models []Model, limiters map[string]*Rat
 
 	for {
 		fmt.Printf("%s%s›%s ", Magenta, Bold, Reset)
-		prompt := readLine(reader)
+		prompt, err := readLine(reader)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%sError reading input: %v%s\n", Red, err, Reset)
+			break // Exit chat loop on input error
+		}
 
 		if prompt == "quit" || prompt == "exit" || prompt == "q" {
 			break
@@ -187,7 +209,7 @@ func runGroupChat(reader *bufio.Reader, models []Model, limiters map[string]*Rat
 			go func(m Model) {
 				defer wg.Done()
 				start := time.Now()
-				reply, err := sendWithLimit(m, limiters[m.Key], convs[m.Key].Get())
+				reply, err := sendWithLimit(m, pools[m.Key], convs[m.Key].Get())
 				results <- result{m, reply, time.Since(start), err}
 			}(m)
 		}
@@ -215,12 +237,12 @@ func runGroupChat(reader *bufio.Reader, models []Model, limiters map[string]*Rat
 
 		for _, r := range ordered {
 			if r.err != nil {
-				printError(r.model, r.err)
+				printError(r.model.Provider, r.model.Name, r.err)
 				// Roll back user message for this model
 				convs[r.model.Key].Clear()
 			} else {
 				convs[r.model.Key].Add("assistant", r.reply)
-				printResponse(r.model, r.reply, r.elapsed)
+				printResponse(r.model.Provider, r.model.Name, r.model.ID, r.reply, r.elapsed)
 			}
 		}
 	}
@@ -228,12 +250,9 @@ func runGroupChat(reader *bufio.Reader, models []Model, limiters map[string]*Rat
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-// sendWithLimit applies rate limiting then sends the request.
-func sendWithLimit(m Model, limiter *RateLimiter, history []Message) (string, error) {
-	if err := limiter.Wait(); err != nil {
-		return "", fmt.Errorf("rate limit: %w", err)
-	}
-	return Send(m, history)
+// sendWithLimit dispatches the request via the model's key pool.
+func sendWithLimit(m Model, pool *KeyPool, history []Message) (string, error) {
+	return Send(m, history, pool)
 }
 
 // handleMeta processes commands that are not chat messages.
@@ -258,7 +277,10 @@ func printHelp() {
 	fmt.Printf("%s  Commands: reset · status · help · quit%s\n\n", Grey, Reset)
 }
 
-func readLine(r *bufio.Reader) string {
-	line, _ := r.ReadString('\n')
-	return strings.TrimSpace(line)
+func readLine(r *bufio.Reader) (string, error) {
+	line, err := r.ReadString('\n')
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(line), nil
 }

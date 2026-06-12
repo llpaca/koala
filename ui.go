@@ -44,9 +44,9 @@ func providerColor(p Provider) string {
 }
 
 // modelTag returns a colored "[Name]" label for a model.
-func modelTag(m Model) string {
-	col := providerColor(m.Provider)
-	return fmt.Sprintf("%s%s[%s]%s", col, Bold, m.Name, Reset)
+func modelTag(p Provider, modelName string) string {
+	col := providerColor(p);
+	return fmt.Sprintf("%s%s[%s]%s", col, Bold, modelName, Reset)
 }
 
 // ── Spinner ──────────────────────────────────────────────────────────────────
@@ -108,17 +108,17 @@ func (s *Spinner) Stop() {
 func printHeader() {
 	fmt.Print("\033[H\033[2J") // clear screen
 	line := strings.Repeat("─", 60)
-	fmt.Printf("\n%s%s%s\n", Cyan+Bold, "  llmtui — multi-provider LLM terminal client", Reset)
+	fmt.Printf("%s%s%s\n", Cyan+Bold, "  llmtui — multi-provider LLM terminal client", Reset)
 	fmt.Printf("%s%s%s\n\n", Grey, line, Reset)
 }
 
-func printModelList(models []Model, limiters map[string]*RateLimiter) {
+func printModelList(models []Model, pools map[string]*KeyPool) {
 	fmt.Println(Bold + "  Models:" + Reset)
 	for i, m := range models {
 		col := providerColor(m.Provider)
 		status := ""
-		if l, ok := limiters[m.Key]; ok {
-			status = Grey + " · " + l.Status() + Reset
+		if p, ok := pools[m.Key]; ok {
+			status = Grey + " · " + p.Status() + Reset
 		}
 		ctxK := m.ContextWindow / 1000
 		fmt.Printf("  %s%d.%s %s%-18s%s %s(%s)%s  %s%dk ctx%s%s\n",
@@ -136,17 +136,17 @@ func printDivider() {
 	fmt.Printf("%s%s%s\n", Grey, strings.Repeat("─", 60), Reset)
 }
 
-func printResponse(m Model, text string, elapsed time.Duration) {
-	col := providerColor(m.Provider)
-	fmt.Printf("\n%s%s▶ %s%s\n", col, Bold, m.Name, Reset)
+func printResponse(p Provider, modelName, modelID, text string, elapsed time.Duration) {
+	col := providerColor(p)
+	fmt.Printf("\n%s%s▶ %s%s\n", col, Bold, modelName, Reset)
 	printDivider()
 	fmt.Println(text)
 	fmt.Printf("%s[%.2fs · %s · %s]%s\n\n",
-		Grey, elapsed.Seconds(), m.Provider, m.ID, Reset)
+		Grey, elapsed.Seconds(), p, modelID, Reset)
 }
 
-func printError(m Model, err error) {
-	fmt.Printf("\n%s%s✖ %s:%s %v\n\n", Red, Bold, m.Name, Reset, err)
+func printError(p Provider, modelName string, err error) {
+	fmt.Printf("\n%s%s✖ %s:%s %v\n\n", Red, Bold, modelName, Reset, err)
 }
 
 func printInfo(msg string) {
@@ -155,4 +155,38 @@ func printInfo(msg string) {
 
 func printWarn(msg string) {
 	fmt.Printf("%s⚠ %s%s\n", Yellow, msg, Reset)
+}
+
+// ── Tool call UI ──────────────────────────────────────────────────────────────
+
+func printToolCall(p Provider, call ToolCall) {
+	col := providerColor(p)
+	// Build a short summary of args
+	argParts := []string{}
+	for k, v := range call.Args {
+		val := fmt.Sprintf("%v", v)
+		if len(val) > 60 {
+			val = val[:60] + "…"
+		}
+		argParts = append(argParts, fmt.Sprintf("%s=%s", k, val))
+	}
+	argStr := strings.Join(argParts, ", ")
+	fmt.Printf("%s  ⚙ %s(%s)%s\n", col+Dim, call.Name, argStr, Reset)
+}
+
+func printToolResult(p Provider, r ToolResult) {
+	col := providerColor(p)
+	var icon string
+	if r.IsErr {
+		icon = Red + "  ✗" + Reset
+	} else {
+		icon = col + "  ✓" + Reset
+	}
+	summary := r.Output
+	if len(summary) > 120 {
+		summary = summary[:120] + "…"
+	}
+	// replace newlines for compact display
+	summary = strings.ReplaceAll(summary, "\n", " ↵ ")
+	fmt.Printf("%s %s%s%s\n", icon, Grey, summary, Reset)
 }

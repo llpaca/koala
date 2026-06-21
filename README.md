@@ -10,5 +10,5 @@ ai agent taht is meant to be free, not yet
 |__|__|_  |___|_|_|_| |___|
       |___| 
 
-agent0 $>
+\033[32magent0 $>\033[0m
 ```

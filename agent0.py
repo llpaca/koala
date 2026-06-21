@@ -1,21 +1,14 @@
 import os
 from dotenv import load_dotenv
-
 load_dotenv()
 
 from google import genai
-
 from agents.ggl import goog
 from asset.ascii import asciii
 
 from memory.manager import MemoryManager
 
-# --------------------------------------------------
-# Setup
-# --------------------------------------------------
-
 asciii()
-
 ORANGE = "\033[38;2;255;165;0m"
 GREEN = "\033[92m"
 RESET = "\033[0m"
@@ -26,24 +19,13 @@ AKL = [
     "GROQ_API_KEY",
 ]
 
-client = genai.Client(
-    api_key=os.getenv(AKL[1].format(i=2))
-)
+client = genai.Client(api_key=os.getenv(AKL[1].format(i=2)))
 
 memdb = MemoryManager()
-
 MEM = []
 
 
-# --------------------------------------------------
-# Memory Helpers
-# --------------------------------------------------
-
 def should_consider_memory(text: str) -> bool:
-    """
-    Skip obvious junk.
-    """
-
     text = text.strip()
 
     if len(text) < 20:
@@ -68,23 +50,15 @@ def should_consider_memory(text: str) -> bool:
 
     return True
 
-
 def retrieve_memories(query: str, k: int = 5) -> str:
-    """
-    Search FAISS for related memories.
-    """
-
     if len(memdb.store.documents) == 0:
         return ""
 
     try:
         results = memdb.store.search(query, k=k)
-
         memories = []
 
         for score, memory in results:
-
-            # Tune this threshold later
             if score > 0.65:
                 memories.append(
                     f"[similarity={score:.2f}] {memory}"
@@ -97,24 +71,14 @@ def retrieve_memories(query: str, k: int = 5) -> str:
         return ""
 
 
-# --------------------------------------------------
-# Main Loop
-# --------------------------------------------------
-
 while True:
-
     try:
-
         inp = input(
             f"{ORANGE}agent0 $> {RESET}"
         ).strip()
 
         if not inp:
             continue
-
-        # ------------------------------------------
-        # Commands
-        # ------------------------------------------
 
         if inp.lower() == "/memory":
 
@@ -198,10 +162,6 @@ while True:
             memdb.save()
             break
 
-        # ------------------------------------------
-        # Retrieve memories
-        # ------------------------------------------
-
         memory_context = retrieve_memories(inp)
 
         enhanced_input = inp
@@ -209,18 +169,14 @@ while True:
         if memory_context:
 
             enhanced_input = f"""
-Relevant memories from previous conversations:
+                    Relevant memories from previous conversations:
 
-{memory_context}
+                    {memory_context}
 
-Current user message:
+                    Current user message:
 
-{inp}
-"""
-
-        # ------------------------------------------
-        # LLM Call
-        # ------------------------------------------
+                    {inp}
+                    """
 
         stream = goog(
             client,
@@ -244,10 +200,6 @@ Current user message:
 
         print()
 
-        # ------------------------------------------
-        # Session Memory
-        # ------------------------------------------
-
         MEM.append({
             "type": "user_input",
             "content": [
@@ -268,13 +220,8 @@ Current user message:
             ]
         })
 
-        # Keep session memory bounded
         if len(MEM) > 100:
             MEM = MEM[-100:]
-
-        # ------------------------------------------
-        # Long-Term Memory
-        # ------------------------------------------
 
         if should_consider_memory(inp):
 

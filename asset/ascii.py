@@ -79,15 +79,6 @@ def terminal_supports_truecolor() -> bool:
     import os
     return sys.stdout.isatty() and os.environ.get("COLORTERM", "") in ("truecolor", "24bit")
 
-
-if __name__ == "__main__":
+def asciii():
     use_color = terminal_supports_truecolor() or "--force-color" in sys.argv
     print(render(BANNER, use_color))
-
-    if not use_color:
-        print(
-            "\n(No truecolor detected — printed in plain text. "
-            "Run with --force-color to try anyway, or check that "
-            "COLORTERM=truecolor is set in your shell.)",
-            file=sys.stderr,
-        )

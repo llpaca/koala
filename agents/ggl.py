@@ -1,5 +1,6 @@
 from google import genai
 from google.genai import types
+from .tools import TOOLS, FUNCTION_MAP
 
 def goog(client, memory, input, thinking_level, stream, temperature):
         # client = genai.Client(api_key=user_api_key)
@@ -14,5 +15,6 @@ def goog(client, memory, input, thinking_level, stream, temperature):
                 "thinking_level": thinking_level,
                 "temperature":temperature,
             },
+            tools=TOOLS,
             stream=stream
         )

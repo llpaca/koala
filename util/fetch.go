@@ -132,7 +132,7 @@ func fetchGroq(client *HTTPClient) {
 }
 
 func fetchGoogle(client *HTTPClient) {
-	apiKey := os.Getenv("GOOGLE_API_KEY")
+	apiKey := os.Getenv("GOOGLE_API_KEY_1")
 	if apiKey == "" {
 		fmt.Println("missing GOOGLE_API_KEY")
 		return
@@ -190,7 +190,7 @@ func fetchGoogle(client *HTTPClient) {
 }
 
 func fetchMistral(client *HTTPClient) {
-	apiKey := os.Getenv("MISTRAL_API_KEY")
+	apiKey := os.Getenv("MISTRAL_API_KEY_1")
 	if apiKey == "" {
 		fmt.Println("missing MISTRAL_API_KEY")
 		return

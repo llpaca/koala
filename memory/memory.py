@@ -10,10 +10,11 @@ class LocalVectorStore:
             "BAAI/bge-small-en-v1.5"
         )
 
-        if os.path.exists("index.faiss"):
-            self.index = faiss.read_index("index.faiss")
+        os.makedirs("agent_mem", exist_ok=True)
+        if os.path.exists("agent_mem/index.faiss"):
+            self.index = faiss.read_index("agent_mem/index.faiss")
 
-            with open("documents.pkl", "rb") as f:
+            with open("agent_mem/documents.pkl", "rb") as f:
                 self.documents = pickle.load(f)
         else:
             dim = self.model.get_sentence_embedding_dimension()
@@ -44,7 +45,7 @@ class LocalVectorStore:
         ]
 
     def save(self):
-        faiss.write_index(self.index, "index.faiss")
+        faiss.write_index(self.index, "agent_mem/index.faiss")
 
-        with open("documents.pkl", "wb") as f:
+        with open("agent_mem/documents.pkl", "wb") as f:
             pickle.dump(self.documents, f)

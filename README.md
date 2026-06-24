@@ -1,14 +1,4 @@
 # koala
 ai agent taht is meant to be free, not yet
 
-```shell
-❯ python3 agent0.py
-
- _____             _   ___ 
-|  _  |___ ___ ___| |_|   |
-|     | . | -_|   |  _| | |
-|__|__|_  |___|_|_|_| |___|
-      |___| 
-
-\033[32magent0 $>\033[0m
-```
+![agent0](images/agent0.png)

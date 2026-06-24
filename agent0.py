@@ -1,11 +1,14 @@
 import os
+import json
 from dotenv import load_dotenv
 load_dotenv()
 
 from google import genai
 from agents.ggl import goog
+from agents.tools import FUNCTION_MAP
 from asset.ascii import asciii
 
+CYAN = "\033[96m"
 from memory.manager import MemoryManager
 
 asciii()
@@ -19,7 +22,7 @@ AKL = [
     "GROQ_API_KEY",
 ]
 
-client = genai.Client(api_key=os.getenv(AKL[1].format(i=2)))
+client = genai.Client(api_key=os.getenv(AKL[1].format(i=3)))
 
 memdb = MemoryManager()
 MEM = []
@@ -32,17 +35,7 @@ def should_consider_memory(text: str) -> bool:
         return False
 
     junk = {
-        "ok",
-        "okay",
-        "thanks",
-        "thank you",
-        "cool",
-        "nice",
-        "yep",
-        "yes",
-        "no",
-        "hi",
-        "hello"
+        "ok","okay","thanks","thank you","cool","nice","yep","yes","no","hi","hello"
     }
 
     if text.lower() in junk:
@@ -103,12 +96,7 @@ while True:
             continue
 
         if inp.lower() == "/memory count":
-
-            print(
-                f"Total Memories: "
-                f"{len(memdb.store.documents)}"
-            )
-
+            print(f"Total Memories: "f"{len(memdb.store.documents)}")
             continue
 
 
@@ -121,21 +109,13 @@ while True:
                 k=10
             )
 
-            print(
-                f"\n=== SEARCH RESULTS "
-                f"FOR '{query}' ==="
-            )
+            print(f"\n=== SEARCH RESULTS "f"FOR '{query}' ===")
 
             for score, memory in results:
-
-                print(
-                    f"\nScore: {score:.4f}"
-                )
-
+                print(f"\nScore: {score:.4f}")
                 print(memory)
 
             print()
-
             continue
 
 
@@ -188,17 +168,68 @@ while True:
         )
 
         reply_text = ""
+        pending_tool_calls = []
+
+        current_call = None
 
         for event in stream:
-
-            if (
-                event.event_type == "step.delta"
-                and event.delta.type == "text"
-            ):
+            if event.event_type == "step.delta" and event.delta.type == "text":
                 print(event.delta.text, end="")
                 reply_text += event.delta.text
 
+            elif event.event_type == "step.delta" and event.delta.type == "arguments_delta":
+                if current_call is not None:
+                    current_call["raw_args"] += event.delta.arguments
+
+            elif event.event_type == "step.start":
+                step = event.step
+                if hasattr(step, "type") and step.type == "function_call":
+                    current_call = {
+                        "name": step.name,
+                        "raw_args": "",
+                        "call_id": step.id,
+                    }
+
+            elif event.event_type == "step.stop":
+                if current_call is not None:
+                    args = json.loads(current_call["raw_args"]) if current_call["raw_args"] else {}
+                    pending_tool_calls.append({
+                        "name": current_call["name"],
+                        "args": args,
+                        "call_id": current_call["call_id"],
+                    })
+                    current_call = None
+
+        # for event in stream:
+        #     # print(f"DEBUG: {event.event_type} | {event}")  # add this temporarily
+        #     if event.event_type == "step.delta"and event.delta.type == "text":
+        #         print(event.delta.text, end="")
+        #         reply_text += event.delta.text
+        #     elif event.event_type == "step.start":
+        #         step = event.step
+        #         if hasattr(step, "type") and step.type == "function_call":
+        #             print(f"DEBUG args: {repr(step.arguments)}")
+        #             args = step.arguments
+        #             if isinstance(args, str):
+        #                 args = json.loads(args)
+        #             pending_tool_calls.append({
+        #                 "name": step.name,
+        #                 "args": args or {},
+        #                 "call_id": step.id,
+        #             })
         print()
+
+        # execute any tool calls
+        for call in pending_tool_calls:
+            fn = FUNCTION_MAP.get(call["name"])
+            print(f"{CYAN}[tool: {call['name']}]{RESET}")
+            result = fn(**call["args"]) if fn else f"unknown tool: {call['name']}"
+            print(f"{CYAN}[result: {str(result)[:100]}]{RESET}")
+
+            MEM.append({
+                "type": "tool_result",
+                "content": [{"type": "function_response", "name": call["name"], "response": {"result": str(result)}}]
+            })
 
         MEM.append({
             "type": "user_input",
@@ -224,23 +255,14 @@ while True:
             MEM = MEM[-100:]
 
         if should_consider_memory(inp):
-
             action = memdb.process(inp)
-
-            print(
-                f"{GREEN}[memory: {action}]{RESET}"
-            )
-
+            print( f"{GREEN}[memory: {action}]{RESET}")
             memdb.save()
 
     except KeyboardInterrupt:
-
         print("\nSaving memory...")
-
         memdb.save()
-
         break
 
     except Exception as e:
-
         print(f"\nError: {e}")

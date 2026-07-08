@@ -4,6 +4,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from google import genai
+from openai import OpenAI
+
 from agents.ggl import goog
 from agents.tools import FUNCTION_MAP
 from asset.ascii import asciii
@@ -22,7 +24,8 @@ AKL = [
     "GROQ_API_KEY",
 ]
 
-client = genai.Client(api_key=os.getenv(AKL[1].format(i=3)))
+goog_client = genai.Client(api_key=os.getenv(AKL[1].format(i=3)))
+nvidia_client = OpenAI(base_url = "https://integrate.api.nvidia.com/v1",api_key=os.getenv("NVIDIA_API_KEY"))
 
 memdb = MemoryManager()
 MEM = []
@@ -159,7 +162,7 @@ while True:
                     """
 
         stream = goog(
-            client,
+            goog_client,
             memory=MEM,
             input=enhanced_input,
             thinking_level="low",

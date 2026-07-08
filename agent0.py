@@ -7,6 +7,8 @@ from google import genai
 from openai import OpenAI
 
 from agents.ggl import goog
+from agents.nemo import nvidia_nemo
+
 from agents.tools import FUNCTION_MAP
 from asset.ascii import asciii
 
@@ -22,10 +24,11 @@ AKL = [
     "MISTRAL_API_KEY_{i}",
     "GOOGLE_API_KEY_{i}",
     "GROQ_API_KEY",
+    "NVIDIA_API_KEY",
 ]
 
 goog_client = genai.Client(api_key=os.getenv(AKL[1].format(i=3)))
-nvidia_client = OpenAI(base_url = "https://integrate.api.nvidia.com/v1",api_key=os.getenv("NVIDIA_API_KEY"))
+nvidia_client = OpenAI(base_url = "https://integrate.api.nvidia.com/v1",api_key=os.getenv(AKL[3]))
 
 memdb = MemoryManager()
 MEM = []

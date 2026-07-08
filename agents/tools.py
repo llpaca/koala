@@ -31,6 +31,27 @@ FUNCTION_MAP = {
     "run_command": run_command,
 }
 
+
+def to_openai_tools(tools):
+    """
+    Convert the flat, Gemini/Responses-style tool defs above
+    ({"type": "function", "name": ..., "description": ..., "parameters": ...})
+    into the nested format OpenAI-compatible chat.completions endpoints
+    (like NVIDIA's) expect:
+        {"type": "function", "function": {"name", "description", "parameters"}}
+    """
+    converted = []
+    for t in tools:
+        converted.append({
+            "type": "function",
+            "function": {
+                "name": t["name"],
+                "description": t.get("description", ""),
+                "parameters": t.get("parameters", {"type": "object", "properties": {}}),
+            },
+        })
+    return converted
+
 TOOLS = [
     {
         "type": "function",

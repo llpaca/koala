@@ -10,10 +10,10 @@ from agents.ggl import goog
 from agents.nemo import nvidia_nemo
 
 from agents.tools import FUNCTION_MAP
-from asset.ascii import asciii
+from ascii import asciii
 
 CYAN = "\033[96m"
-from memory.manager import MemoryManager
+from manager import MemoryManager
 
 asciii()
 ORANGE = "\033[38;2;255;165;0m"

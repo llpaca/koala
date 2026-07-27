@@ -1,6 +1,6 @@
 # manager.py
 
-from .memory import LocalVectorStore
+from memory import LocalVectorStore
 
 
 class MemoryManager:

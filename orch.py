@@ -10,8 +10,8 @@ from google import genai
 from agents.nemo import nvidia_nemo
 from agents.orchestrator_tools import make_google_agent_tools
 from agents.tools import TOOLS as FILE_TOOLS, FUNCTION_MAP as FILE_FUNCTION_MAP, to_openai_tools
-from asset.ascii import asciii
-from memory.manager import MemoryManager
+from ascii import asciii
+from manager import MemoryManager
 
 CYAN = "\033[96m"
 ORANGE = "\033[38;2;255;165;0m"

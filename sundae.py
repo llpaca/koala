@@ -1,4 +1,5 @@
 # this is sundae my local agent that is supposed to be usefull
+import sys, json, datetime
 from pathlib import Path
 from llama_cpp import Llama
 
@@ -13,11 +14,24 @@ BATCH_SIZE = 512
 GPU_LAYERS = -1
 MAX_TOKENS=4096
 
+def get_time():
+    return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+FUNCS = {"get_time": get_time}
+
+TOOLS = [
+    {"type": "function", "function": {
+        "name": "get_time",
+        "description": "Get the current date and time",
+        "parameters": {"type": "object", "properties": {}}}},
+]
+
 def LoadModel(model_path):
     print("[log] loading model..")
 
     llm = Llama(
         model_path=str(model_path),
+        chat_format="chatml-function-calling",
         n_ctx=CONTEXT_SIZE,
         n_gpu_layers=GPU_LAYERS,
         n_batch=BATCH_SIZE,
@@ -34,10 +48,10 @@ def generate_response(llm, messages):
 
     stream = llm.create_chat_completion(
         messages=messages,
+        tools=TOOLS,
+        tool_choice="auto",
         max_tokens=MAX_TOKENS,
-        temperature=0.7,
-        top_p=0.8,
-        top_k=20,
+        temperature=0.7,top_p=0.8,top_k=20,
         repeat_penalty=1.05,
         stream=True,  # Enable live token streaming
     )
@@ -104,7 +118,6 @@ def chat(llm):
 
             if messages and messages[-1]["role"] == "user":
                 messages.pop()
-
 def main():
     model_path = MODEL_PATH
     llm = LoadModel(model_path)
